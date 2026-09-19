@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 1) CPU-only PyTorch (small wheels, no CUDA). numpy<2 is required by torch 2.1 / mmcv 2.1.
 RUN pip install "numpy<2" \
-    && pip install torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cpu
+    && pip install torch==2.1.0+cpu torchvision==0.16.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
 
 # 2) mmcv: use the PREBUILT CPU wheel matching torch 2.1.0 / cp310 (compiling mmcv takes ~1h and OOMs on Railway).
 #    --only-binary makes the build fail fast rather than silently falling back to a source build.
