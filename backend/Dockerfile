@@ -28,7 +28,9 @@ RUN pip install mmengine==0.10.4 \
 #    then install only what MMPose imports at runtime.
 RUN pip install --no-deps mmpose==1.3.2 \
     && pip install "numpy<2" json_tricks matplotlib munkres scipy pycocotools xtcocotools \
-       opencv-python-headless==4.10.0.84 pillow rich tabulate \n    && pip install --no-deps mmdet==3.2.0 \n    && pip install shapely terminaltables six
+       opencv-python-headless==4.10.0.84 pillow rich tabulate \
+    && pip install --no-deps mmdet==3.2.0 \
+    && pip install shapely terminaltables six
 
 # 4) App dependencies
 COPY requirements.txt .
