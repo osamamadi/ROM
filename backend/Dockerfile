@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1
+FROM python:3.10-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# System libs: libgl1/libglib2.0-0 for OpenCV; build-essential only as a fallback
+# in case xtcocotools has to compile its C extension.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 1) CPU-only PyTorch (small wheels, no CUDA). numpy<2 is required by torch 2.1 / mmcv 2.1.
+RUN pip install "numpy<2" \
+    && pip install torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cpu
+
+# 2) mmcv: use the PREBUILT CPU wheel matching torch 2.1.0 / cp310 (compiling mmcv takes ~1h and OOMs on Railway).
+#    --only-binary makes the build fail fast rather than silently falling back to a source build.
+RUN pip install mmengine==0.10.4 \
+    && pip install --only-binary=:all: mmcv==2.1.0 \
+       -f https://download.openmmlab.com/mmcv/dist/cpu/torch2.1.0/index.html
+
+# 3) MMPose WITHOUT its dependency list (it pins `chumpy`, which fails to build on modern pip/setuptools),
+#    then install only what MMPose imports at runtime.
+RUN pip install --no-deps mmpose==1.3.2 \
+    && pip install "numpy<2" json_tricks matplotlib munkres scipy pycocotools xtcocotools \
+       opencv-python-headless==4.10.0.84 pillow rich tabulate
+
+# 4) App dependencies
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Fail the BUILD (not the deploy) if the ML stack is broken.
+RUN python -c "import torch, mmcv, mmengine, mmpose; from mmpose.apis import inference_topdown, init_model; \
+print('torch', torch.__version__, '| mmcv', mmcv.__version__, '| mmpose', mmpose.__version__)"
+
+COPY . .
+
+# Weights are downloaded at app startup (see main.py), not baked into the image.
+RUN mkdir -p /app/weights
+
+EXPOSE 8000
+# Railway injects $PORT. One worker: the model lives in memory once.
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
