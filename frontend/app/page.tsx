@@ -51,7 +51,7 @@ export default function Home() {
     <div className="min-h-screen bg-gradient-to-b from-blue-50/70 via-slate-50 to-slate-50">
       {/* Top bar */}
       <nav className="border-b border-slate-200/70 bg-white/80 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white shadow-md shadow-blue-600/30">
               <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
@@ -70,7 +70,7 @@ export default function Home() {
         </div>
       </nav>
 
-      <main className="mx-auto max-w-5xl px-6 py-12">
+      <main className="mx-auto max-w-6xl px-6 py-12">
         <header className="mx-auto mb-12 max-w-2xl text-center">
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
             Ankle Range of Motion,{" "}

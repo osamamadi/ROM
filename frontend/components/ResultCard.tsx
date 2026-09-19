@@ -11,28 +11,28 @@ interface AngleFigureProps {
 function AngleFigure({ title, caption, angle, image, tone }: AngleFigureProps) {
   const badge =
     tone === "blue"
-      ? "bg-blue-600 text-white shadow-blue-600/25"
-      : "bg-slate-800 text-white shadow-slate-800/25";
+      ? "bg-blue-600 text-white shadow-blue-600/40"
+      : "bg-slate-800 text-white shadow-slate-800/40";
 
   return (
-    <figure className="flex flex-col">
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-100">
+    <figure className="flex flex-col items-center">
+      <div className="w-full overflow-hidden rounded-2xl bg-slate-900 shadow-2xl shadow-slate-900/25 ring-1 ring-slate-900/10">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`data:image/jpeg;base64,${image}`}
           alt={`${title} with detected keypoints`}
-          className="h-80 w-full object-contain"
+          className="block h-auto w-full"
         />
       </div>
-      <figcaption className="-mt-5 flex flex-col items-center">
+      <figcaption className="relative z-10 -mt-7 flex flex-col items-center">
         <span
-          className={`inline-flex items-baseline gap-2 rounded-full px-5 py-2 shadow-lg ${badge}`}
+          className={`inline-flex items-baseline gap-3 rounded-full px-7 py-3 ring-4 ring-white shadow-xl ${badge}`}
           aria-label={`${title} angle ${angle.toFixed(1)} degrees`}
         >
           <span className="text-xs font-semibold uppercase tracking-widest opacity-80">{title}</span>
-          <span className="text-2xl font-bold tabular-nums">{angle.toFixed(1)}°</span>
+          <span className="text-3xl font-extrabold tabular-nums">{angle.toFixed(1)}°</span>
         </span>
-        <span className="mt-2 text-xs text-slate-500">{caption}</span>
+        <span className="mt-3 text-sm text-slate-500">{caption}</span>
       </figcaption>
     </figure>
   );
@@ -53,7 +53,7 @@ export default function ResultCard({ result }: { result: RomResult }) {
       </div>
 
       {/* Headline result */}
-      <div className="px-6 pb-2 pt-10 text-center sm:px-8">
+      <div className="px-6 pb-2 pt-12 text-center sm:px-8">
         <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-500">ROM Delta</p>
         <p className="mt-2 text-8xl font-black leading-none tracking-tight text-emerald-600 tabular-nums sm:text-9xl">
           {result.rom.toFixed(1)}
@@ -72,7 +72,7 @@ export default function ResultCard({ result }: { result: RomResult }) {
       <div className="mx-6 my-8 border-t border-dashed border-slate-200 sm:mx-8" />
 
       {/* Side-by-side annotated images */}
-      <div className="grid gap-x-8 gap-y-10 px-6 pb-10 sm:px-8 md:grid-cols-2">
+      <div className="grid gap-x-10 gap-y-14 px-6 pb-12 sm:px-10 lg:px-12 md:grid-cols-2">
         <AngleFigure
           title="Resting"
           caption="Angle at heel · Resting position"
