@@ -29,7 +29,7 @@ export default function Home() {
     } catch (e) {
       setError(
         e instanceof TypeError
-          ? "Could not reach the analysis server. Please try again shortly."
+          ? `Could not get a response from the analysis server (${e.message}). It may have run out of memory and restarted — check the server logs, then try again.`
           : e instanceof Error
             ? e.message
             : "Something went wrong.",

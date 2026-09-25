@@ -1,9 +1,11 @@
 """Model download + MMPose inference wrapper."""
+import gc
 import logging
 import os
 
 import gdown
 import numpy as np
+import torch
 from mmengine.config import Config
 from mmpose.apis import inference_topdown, init_model
 
@@ -25,6 +27,61 @@ def ensure_weights(url: str, dest: str) -> str:
     if not gdown.download(url, dest, quiet=False, fuzzy=True):
         raise RuntimeError("gdown failed to download the model weights.")
     return dest
+
+
+def slim_path(full_path: str) -> str:
+    root, ext = os.path.splitext(full_path)
+    return f"{root}_slim{ext}"
+
+
+def make_slim_checkpoint(full_path: str, delete_full: bool = True) -> str:
+    """Strip optimizer state etc. from the training checkpoint: keep only {state_dict, meta}.
+
+    `meta` holds dataset_meta (keypoint names), which init_model reads. The full file is deleted afterwards.
+    """
+    dest = slim_path(full_path)
+    ck = torch.load(full_path, map_location="cpu")
+    log.info("Full checkpoint keys: %s", sorted(ck.keys()))
+    slim = {"state_dict": ck["state_dict"], "meta": ck.get("meta", {})}
+    del ck
+    gc.collect()
+    tmp = dest + ".tmp"
+    torch.save(slim, tmp)
+
+    # Prove the file on disk holds bit-identical weights before the full checkpoint is deleted.
+    back = torch.load(tmp, map_location="cpu")
+    same = back["state_dict"].keys() == slim["state_dict"].keys() and all(
+        torch.equal(back["state_dict"][k], v) for k, v in slim["state_dict"].items()
+    )
+    has_meta = "dataset_meta" in back.get("meta", {})
+    del back
+    if not same:
+        os.remove(tmp)
+        raise RuntimeError("Slim checkpoint does not match the original state_dict.")
+    log.info("Slim state_dict verified bit-identical (%d tensors); dataset_meta kept: %s", len(slim["state_dict"]), has_meta)
+
+    os.replace(tmp, dest)  # atomic: a crash mid-write never leaves a truncated *_slim.pth
+    del slim
+    gc.collect()
+    log.info("Slim checkpoint: %.0f MB -> %.0f MB", os.path.getsize(full_path) / 2**20, os.path.getsize(dest) / 2**20)
+    if delete_full:
+        os.remove(full_path)
+    return dest
+
+
+def ensure_model_file(url: str, full_path: str) -> str:
+    """Return the path of the slim checkpoint, downloading + slimming the full one only if needed."""
+    dest = slim_path(full_path)
+    if os.path.exists(dest):
+        log.info("Slim weights already present at %s", dest)
+        return dest
+    full = ensure_weights(url, full_path)
+    try:
+        return make_slim_checkpoint(full)
+    except Exception:
+        # Never take the service down over an optimisation: fall back to the full checkpoint.
+        log.exception("Slimming failed; falling back to the full checkpoint (higher memory use).")
+        return full
 
 
 def _repoint_metainfo(node, path: str) -> None:
@@ -69,9 +126,10 @@ class PoseEstimator:
     def predict(self, img_bgr: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Full-frame bbox (no detector). Returns keypoints (3, 2) in this image's pixels and scores (3,)."""
         h, w = img_bgr.shape[:2]
-        results = inference_topdown(
-            self.model, img_bgr, bboxes=np.array([[0, 0, w, h]], dtype=np.float32), bbox_format="xyxy"
-        )
+        with torch.inference_mode():
+            results = inference_topdown(
+                self.model, img_bgr, bboxes=np.array([[0, 0, w, h]], dtype=np.float32), bbox_format="xyxy"
+            )
         if not results:
             raise ValueError("No pose detected.")
         inst = results[0].pred_instances

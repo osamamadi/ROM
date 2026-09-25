@@ -10,13 +10,16 @@ MAX_LONG_SIDE = 2048
 
 @dataclass
 class PreparedImage:
-    full_bgr: np.ndarray    # EXIF-corrected, original resolution (used for the overlay)
-    small_bgr: np.ndarray   # downscaled to long side <= 2048 (used for inference)
-    scale: float            # small = full * scale
+    bgr: np.ndarray                 # EXIF-corrected, long side <= 2048; used for inference AND the overlay
+    scale: float                    # bgr = original * scale
+    orig_size: tuple[int, int]      # (width, height) of the EXIF-corrected original
 
 
 def prepare_image(data: bytes) -> PreparedImage:
-    """EXIF-transpose -> RGB -> LANCZOS downscale to long side <= 2048. Raises ValueError if not an image."""
+    """EXIF-transpose -> RGB -> LANCZOS downscale to long side <= 2048. Raises ValueError if not an image.
+
+    The full-resolution decode is released before returning, so only the downscaled array stays alive.
+    """
     try:
         img = Image.open(io.BytesIO(data))
         img = ImageOps.exif_transpose(img).convert("RGB")
@@ -25,8 +28,10 @@ def prepare_image(data: bytes) -> PreparedImage:
 
     w, h = img.size
     scale = min(1.0, MAX_LONG_SIDE / max(w, h))
-    small = img if scale == 1.0 else img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
+    if scale != 1.0:
+        img = img.resize((round(w * scale), round(h * scale)), Image.LANCZOS)
 
     # MMPose (like mmcv.imread) expects BGR arrays.
-    to_bgr = lambda im: np.ascontiguousarray(np.asarray(im)[:, :, ::-1])
-    return PreparedImage(full_bgr=to_bgr(img), small_bgr=to_bgr(small), scale=scale)
+    bgr = np.ascontiguousarray(np.asarray(img)[:, :, ::-1])
+    img.close()
+    return PreparedImage(bgr=bgr, scale=scale, orig_size=(w, h))

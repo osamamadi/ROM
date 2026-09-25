@@ -17,7 +17,7 @@ KEYPOINT_NAMES = ["bottom_heel", "5th_metatarsal", "malleolus"]
 CROP_PAD_PX = 200        # minimum padding around the points' bounding box
 CROP_PAD_FRAC = 0.35     # ...or this fraction of the box's longest side, whichever is larger
 OUT_MIN_SIDE = 900       # upscale small crops so annotations stay crisp
-OUT_MAX_SIDE = 1600      # ...and cap huge ones to keep the JSON payload reasonable
+OUT_MAX_SIDE = 1280      # ...and cap large ones (payload size + memory)
 
 # BGR
 C_AXIS, C_VERT, C_ARC = (255, 170, 0), (255, 255, 255), (0, 200, 255)
