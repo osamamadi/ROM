@@ -79,10 +79,15 @@ export default function Home() {
             </span>
           </h1>
           <p className="mt-4 text-lg text-slate-600">
-            Upload a resting and a dorsiflexion photo. Our pose model locates the heel, 5th metatarsal and shin,
-            then computes the angle change.
+            Upload a resting and a dorsiflexion photo. Our pose model locates the heel, 5th metatarsal and
+            malleolus, then computes the angle change.
           </p>
         </header>
+
+        <p className="mx-auto mb-8 max-w-2xl rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-center text-sm text-blue-800">
+          Take both photos from the same fixed position — do not move the camera between the rest and the
+          dorsiflexion photo.
+        </p>
 
         <section className="grid gap-8 md:grid-cols-2">
           <Dropzone

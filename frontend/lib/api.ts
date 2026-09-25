@@ -1,9 +1,20 @@
+export type KeypointName = "bottom_heel" | "5th_metatarsal" | "malleolus";
+
+export interface ImageResult {
+  angle_deg: number;
+  /** [x, y] in ORIGINAL image pixel coordinates */
+  keypoints: Record<KeypointName, [number, number]>;
+  /** per-keypoint confidence, 0..1 */
+  scores: Record<KeypointName, number>;
+  /** base64 JPEG overlay (no data-URI prefix) */
+  overlay: string;
+}
+
 export interface RomResult {
-  angle_rest: number;
-  angle_dorsi: number;
-  rom: number;
-  image_rest: string; // base64 JPEG
-  image_dorsi: string;
+  rom_deg: number;
+  rest: ImageResult;
+  dorsi: ImageResult;
+  warnings: string[];
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
