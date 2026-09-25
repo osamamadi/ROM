@@ -28,9 +28,10 @@ MODEL_URL = os.getenv("MODEL_URL", "https://drive.google.com/uc?id=1WVB3HL6lhEHg
 MODEL_PATH = os.getenv("MODEL_PATH", "/app/weights/epoch_160.pth")
 MODEL_CONFIG = os.getenv("MODEL_CONFIG", "configs/hrnet_w32_ankle_v2.py")  # MMPose training config (v2)
 DEVICE = os.getenv("DEVICE", "cpu")
-ALLOWED_ORIGINS = parse_origins(os.getenv("ALLOWED_ORIGINS", "http://localhost:3000"))
+RAW_ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+ALLOWED_ORIGINS = parse_origins(RAW_ALLOWED_ORIGINS)
 TORCH_THREADS = int(os.getenv("TORCH_THREADS", "2"))
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 LOW_CONF = 0.5
 
 app = FastAPI(title="Ankle ROM API")
@@ -53,7 +54,8 @@ app.add_middleware(CORSMiddleware, allow_origins=ALLOWED_ORIGINS, allow_methods=
 @app.on_event("startup")
 def load_model() -> None:
     """Download weights (once), slim them, and load the model into memory. Runs at boot, never per request."""
-    log.info("CORS allowed origins: %s", ALLOWED_ORIGINS)
+    log.info("ALLOWED_ORIGINS raw env value: %r -> parsed: %s", RAW_ALLOWED_ORIGINS, ALLOWED_ORIGINS)
+    log.info("Env vars whose name mentions ORIGIN/CORS: %s", sorted(k for k in os.environ if "ORIGIN" in k.upper() or "CORS" in k.upper()))
     torch.set_num_threads(TORCH_THREADS)
     log_rss("startup (before model)")
     checkpoint = ensure_model_file(MODEL_URL, MODEL_PATH)
@@ -69,17 +71,20 @@ def health() -> dict:
     return {"status": "ok", "model_loaded": hasattr(app.state, "estimator")}
 
 
-async def _read(upload: UploadFile) -> bytes:
-    data = await upload.read()
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, f"{upload.filename}: file exceeds 10 MB.")
-    return data
+def _check_size(upload: UploadFile) -> None:
+    """413 (JSON, so CORS headers are attached) before any bytes are pulled into memory."""
+    if upload.size is not None and upload.size > MAX_UPLOAD_BYTES:
+        raise HTTPException(413, f"{upload.filename}: file is {upload.size / 2**20:.0f} MB, the limit is "
+                                 f"{MAX_UPLOAD_BYTES // 2**20} MB.")
 
 
-def _analyse(data: bytes, label: str) -> tuple[dict, list[str], object]:
-    """One image -> (result dict, warnings, keypoints in original-image pixels)."""
+def _analyse(holder: list[bytes], label: str) -> tuple[dict, list[str], object]:
+    """One image -> (result dict, warnings, keypoints in original-image pixels).
+
+    `holder` carries the raw upload bytes so they can be released as soon as the array is decoded.
+    """
     try:
-        img = prepare_image(data)
+        img = prepare_image(holder.pop())  # no reference to the raw bytes survives this call
         log_rss(f"{label}: decoded")
         kpts_small, scores = app.state.estimator.predict(img.bgr)
     except ValueError as e:
@@ -110,11 +115,20 @@ async def calculate_rom(image_rest: UploadFile = File(...), image_dorsi: UploadF
         raise HTTPException(503, "Model is not loaded yet.")
 
     log_rss("request start")
-    rest_bytes, dorsi_bytes = await _read(image_rest), await _read(image_dorsi)
-    # Inference is CPU-bound: keep it off the event loop. Strictly sequential to bound peak memory.
-    rest, w1, k_rest = await run_in_threadpool(_analyse, rest_bytes, "Resting image")
-    del rest_bytes
-    dorsi, w2, k_dorsi = await run_in_threadpool(_analyse, dorsi_bytes, "Dorsiflexion image")
-    del dorsi_bytes
+    _check_size(image_rest)
+    _check_size(image_dorsi)
+
+    # Strictly sequential, one upload in memory at a time; raw bytes are dropped as soon as they are decoded.
+    results = []
+    for upload, label in ((image_rest, "Resting image"), (image_dorsi, "Dorsiflexion image")):
+        holder = [await upload.read()]
+        size_mb = len(holder[0]) / 2**20
+        log_rss(f"{label}: upload read ({size_mb:.1f} MB)")
+        if size_mb * 2**20 > MAX_UPLOAD_BYTES:  # fallback when the server did not report upload.size
+            raise HTTPException(413, f"{upload.filename}: file is {size_mb:.0f} MB, the limit is {MAX_UPLOAD_BYTES // 2**20} MB.")
+        # Inference is CPU-bound: keep it off the event loop.
+        results.append(await run_in_threadpool(_analyse, holder, label))
+        gc.collect()
+    (rest, w1, k_rest), (dorsi, w2, k_dorsi) = results
 
     return {"rom_deg": round(rom(k_rest, k_dorsi), 2), "rest": rest, "dorsi": dorsi, "warnings": w1 + w2}

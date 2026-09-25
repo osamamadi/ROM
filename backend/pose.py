@@ -1,7 +1,8 @@
 """Model download + MMPose inference wrapper."""
-import gc
 import logging
 import os
+import subprocess
+import sys
 
 import gdown
 import numpy as np
@@ -35,35 +36,17 @@ def slim_path(full_path: str) -> str:
 
 
 def make_slim_checkpoint(full_path: str, delete_full: bool = True) -> str:
-    """Strip optimizer state etc. from the training checkpoint: keep only {state_dict, meta}.
+    """Slim the training checkpoint in a CHILD PROCESS and return the slim file's path.
 
-    `meta` holds dataset_meta (keypoint names), which init_model reads. The full file is deleted afterwards.
+    The child (slim_checkpoint.py) loads the big file, writes {state_dict, meta}, verifies it is bit-identical
+    and exits; its memory is returned to the OS. This process only ever loads the slim file.
+    Raises RuntimeError if the child fails (the caller falls back to the full checkpoint).
     """
     dest = slim_path(full_path)
-    ck = torch.load(full_path, map_location="cpu")
-    log.info("Full checkpoint keys: %s", sorted(ck.keys()))
-    slim = {"state_dict": ck["state_dict"], "meta": ck.get("meta", {})}
-    del ck
-    gc.collect()
-    tmp = dest + ".tmp"
-    torch.save(slim, tmp)
-
-    # Prove the file on disk holds bit-identical weights before the full checkpoint is deleted.
-    back = torch.load(tmp, map_location="cpu")
-    same = back["state_dict"].keys() == slim["state_dict"].keys() and all(
-        torch.equal(back["state_dict"][k], v) for k, v in slim["state_dict"].items()
-    )
-    has_meta = "dataset_meta" in back.get("meta", {})
-    del back
-    if not same:
-        os.remove(tmp)
-        raise RuntimeError("Slim checkpoint does not match the original state_dict.")
-    log.info("Slim state_dict verified bit-identical (%d tensors); dataset_meta kept: %s", len(slim["state_dict"]), has_meta)
-
-    os.replace(tmp, dest)  # atomic: a crash mid-write never leaves a truncated *_slim.pth
-    del slim
-    gc.collect()
-    log.info("Slim checkpoint: %.0f MB -> %.0f MB", os.path.getsize(full_path) / 2**20, os.path.getsize(dest) / 2**20)
+    worker = os.path.join(HERE, "slim_checkpoint.py")
+    result = subprocess.run([sys.executable, worker, full_path, dest], check=False)  # child logs go to our stderr
+    if result.returncode != 0 or not os.path.exists(dest):
+        raise RuntimeError(f"slim worker failed (exit code {result.returncode})")
     if delete_full:
         os.remove(full_path)
     return dest
