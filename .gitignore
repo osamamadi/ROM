@@ -7,7 +7,7 @@ next-env.d.ts
 __pycache__/
 *.pyc
 .venv/
-backend/weights/
+infrastructure/weights/
 *.pth
 .vercel/
 *.tsbuildinfo

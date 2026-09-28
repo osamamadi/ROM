@@ -86,7 +86,7 @@ def load_config(config_path: str) -> Config:
         config_path = os.path.join(HERE, config_path)
     for p in (config_path, METAINFO_PATH):
         if not os.path.exists(p):
-            raise FileNotFoundError(f"Missing {p}. Copy the v2 config and metainfo into backend/configs/.")
+            raise FileNotFoundError(f"Missing {p}. Copy the v2 config and metainfo into infrastructure/configs/.")
     cfg = Config.fromfile(config_path)
     _repoint_metainfo(cfg._cfg_dict, METAINFO_PATH)  # Config is not a dict itself; walk its ConfigDict
     cfg.load_from = None

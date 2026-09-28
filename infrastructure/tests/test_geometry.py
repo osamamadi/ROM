@@ -1,4 +1,4 @@
-"""Run from backend/:  python -m unittest discover -s tests -v   (also works under pytest)."""
+"""Run from infrastructure/:  python -m unittest discover -s tests -v   (also works under pytest)."""
 import os
 import sys
 import unittest

@@ -1,5 +1,5 @@
 {
-  "name": "rom-frontend",
+  "name": "rom-dashboard",
   "private": true,
   "scripts": {
     "dev": "next dev",
